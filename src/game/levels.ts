@@ -4,6 +4,8 @@ import {
   type DoorDefinition,
   type LevelDefinition,
   type MarkerDefinition,
+  type ObjectDefinition,
+  type ObjectKind,
   type PlateDefinition,
   type Rect,
 } from "./types";
@@ -35,6 +37,27 @@ function plate(id: string, x: number, y = FLOOR_Y): PlateDefinition {
   };
 }
 
+function object(id: string, kind: ObjectKind, x: number, groundY = FLOOR_Y): ObjectDefinition {
+  const size = objectSize(kind);
+  return {
+    id,
+    kind,
+    rect: rect(x, groundY - size.h, size.w, size.h),
+  };
+}
+
+function objectSize(kind: ObjectKind): { w: number; h: number } {
+  if (kind === "plate") {
+    return { w: 58, h: 12 };
+  }
+
+  if (kind === "shield") {
+    return { w: 14, h: 38 };
+  }
+
+  return { w: 44, h: 22 };
+}
+
 function marker(label: string, x: number, y = FLOOR_Y): MarkerDefinition {
   return {
     label,
@@ -63,6 +86,7 @@ export const levels: LevelDefinition[] = [
       tileRect(16, 11, 5, 1),
       tileRect(22, 10, 6, 1),
     ],
+    objects: [],
     plates: [],
     doors: [],
     hazards: [rect(356, FLOOR_Y - 12, 82, 12)],
@@ -70,38 +94,55 @@ export const levels: LevelDefinition[] = [
     exit: rect(804, 10 * TILE_SIZE - 44, 34, 44),
   },
   {
-    id: "headstart",
-    name: "Headstart",
-    prompt: "The ledge is just out of reach. Make a body-sized step.",
+    id: "weight",
+    name: "Weight",
+    prompt: "Carry the Weight, record an Echo, then use the carried Weight as your step.",
     loopDuration: LOOP_DURATION,
     start: start(74),
     solids: [tileRect(0, 15, 30, 2), tileRect(18, 11, 10, 1)],
+    objects: [object("weight-step", "weight", 118)],
     plates: [],
     doors: [],
     hazards: [],
-    markers: [marker("STEP", 510)],
+    markers: [marker("WEIGHT STEP", 510)],
     exit: rect(782, 11 * TILE_SIZE - 44, 34, 44),
   },
   {
-    id: "hold",
-    name: "Hold",
-    prompt: "The door only stays open while something holds the plate.",
+    id: "plate",
+    name: "Plate",
+    prompt: "Carry the Plate to the switch, drop it with E, and keep the door open.",
     loopDuration: LOOP_DURATION,
     start: start(72),
     solids: [tileRect(0, 15, 30, 2)],
+    objects: [object("plate-a", "plate", 112)],
     plates: [plate("A", 248)],
     doors: [door("A", 560, 12 * TILE_SIZE, FLOOR_Y - 12 * TILE_SIZE, ["A"])],
     hazards: [],
-    markers: [],
+    markers: [marker("DROP", 226)],
     exit: rect(780, FLOOR_Y - 44, 34, 44),
   },
   {
-    id: "carry",
-    name: "Carry",
-    prompt: "A lower route can become a moving bridge.",
+    id: "shield",
+    name: "Shield",
+    prompt: "Carry the Shield through the hazard. Echo shields can cover danger too.",
+    loopDuration: LOOP_DURATION,
+    start: start(74),
+    solids: [tileRect(0, 15, 30, 2)],
+    objects: [object("shield-a", "shield", 120)],
+    plates: [],
+    doors: [],
+    hazards: [rect(330, FLOOR_Y - 12, 154, 12)],
+    markers: [marker("SHIELD", 330)],
+    exit: rect(780, FLOOR_Y - 44, 34, 44),
+  },
+  {
+    id: "bridge",
+    name: "Weight Bridge",
+    prompt: "A lower route can become a moving object bridge.",
     loopDuration: LOOP_DURATION,
     start: start(74, 11 * TILE_SIZE),
     solids: [tileRect(0, 11, 9, 1), tileRect(21, 11, 9, 1), tileRect(7, 15, 16, 2)],
+    objects: [object("weight-bridge", "weight", 120, 11 * TILE_SIZE)],
     plates: [],
     doors: [],
     hazards: [],
@@ -109,16 +150,17 @@ export const levels: LevelDefinition[] = [
     exit: rect(820, 11 * TILE_SIZE - 44, 34, 44),
   },
   {
-    id: "two-jobs",
-    name: "Two Jobs",
-    prompt: "One Echo can hold. Another can help you climb.",
+    id: "handoff",
+    name: "Handoff",
+    prompt: "Echo 1 drops the Plate. Later, pick up that handoff and carry the chain forward.",
     loopDuration: LOOP_DURATION,
     start: start(72),
-    solids: [tileRect(0, 15, 19, 2), tileRect(20, 11, 10, 1)],
-    plates: [plate("A", 158)],
-    doors: [door("A", 608, 11 * TILE_SIZE, FLOOR_Y - 11 * TILE_SIZE, ["A"])],
+    solids: [tileRect(0, 15, 22, 2), tileRect(22, 11, 8, 1)],
+    objects: [object("handoff-plate", "plate", 108)],
+    plates: [],
+    doors: [],
     hazards: [],
-    markers: [marker("STEP", 525)],
-    exit: rect(826, 11 * TILE_SIZE - 44, 34, 44),
+    markers: [marker("DROP 1", 314), marker("DROP 2", 542), marker("CLIMB", 662)],
+    exit: rect(814, 11 * TILE_SIZE - 44, 34, 44),
   },
 ];

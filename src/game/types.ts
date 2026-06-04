@@ -5,6 +5,7 @@ export const FIXED_DT = 1 / 60;
 export const PLAYER_WIDTH = 24;
 export const PLAYER_HEIGHT = 36;
 export const MAX_ECHOES = 3;
+export const PICKUP_RADIUS = 58;
 
 export type Facing = -1 | 1;
 
@@ -20,6 +21,21 @@ export type Point = {
   y: number;
 };
 
+export type ObjectKind = "plate" | "shield" | "weight";
+
+export type ObjectRole = "source" | "loose" | "handoff" | "live-carried" | "echo-carried";
+
+export type ObjectSnapshot = {
+  id: string;
+  kind: ObjectKind;
+  rect: Rect;
+};
+
+export type ObjectDropEvent = {
+  t: number;
+  object: ObjectSnapshot;
+};
+
 export type PlayerSnapshot = {
   t: number;
   x: number;
@@ -29,15 +45,27 @@ export type PlayerSnapshot = {
   grounded: boolean;
   alive: boolean;
   facing: Facing;
+  carriedObject: ObjectSnapshot | null;
 };
 
 export type Echo = {
   id: number;
   snapshots: PlayerSnapshot[];
+  objectDrops: ObjectDropEvent[];
 };
 
 export type EchoSample = PlayerSnapshot & {
   echoId: number;
+  rect: Rect;
+  previousRect: Rect;
+  dx: number;
+  dy: number;
+  carriedObject: ObjectSnapshot | null;
+  previousCarriedObject: ObjectSnapshot | null;
+};
+
+export type ObjectPlatform = {
+  id: string;
   rect: Rect;
   previousRect: Rect;
   dx: number;
@@ -47,7 +75,7 @@ export type EchoSample = PlayerSnapshot & {
 export type Support =
   | { kind: "none" }
   | { kind: "ground" }
-  | { kind: "echo"; echoId: number };
+  | { kind: "object"; objectId: string };
 
 export type PlayerState = {
   x: number;
@@ -67,6 +95,12 @@ export type MovementInput = {
   right: boolean;
   jumpPressed: boolean;
   jumpHeld: boolean;
+};
+
+export type ObjectDefinition = {
+  id: string;
+  kind: ObjectKind;
+  rect: Rect;
 };
 
 export type PlateDefinition = {
@@ -92,6 +126,7 @@ export type LevelDefinition = {
   loopDuration: number;
   start: Point;
   solids: Rect[];
+  objects: ObjectDefinition[];
   plates: PlateDefinition[];
   doors: DoorDefinition[];
   hazards: Rect[];
@@ -102,6 +137,12 @@ export type LevelDefinition = {
 export type InteractionState = {
   pressedPlateIds: Set<string>;
   openDoorIds: Set<string>;
+};
+
+export type RenderObject = ObjectSnapshot & {
+  role: ObjectRole;
+  echoId?: number;
+  pulse?: number;
 };
 
 export type DebugState = {

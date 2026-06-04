@@ -9,8 +9,11 @@ import {
   type EchoSample,
   type InteractionState,
   type LevelDefinition,
+  type ObjectKind,
+  type ObjectSnapshot,
   type PlayerState,
   type Rect,
+  type RenderObject,
 } from "./types";
 import { playerRect, rectsOverlap } from "./physics";
 
@@ -21,6 +24,9 @@ type RenderState = {
   player: PlayerState;
   echoes: Echo[];
   echoSamples: EchoSample[];
+  renderObjects: RenderObject[];
+  carryingObject: ObjectSnapshot | null;
+  nearbyObject: ObjectSnapshot | null;
   interactions: InteractionState;
   timelineTime: number;
   debug: boolean;
@@ -42,9 +48,13 @@ export function render(ctx: CanvasRenderingContext2D, state: RenderState): void 
   drawPlates(ctx, level, state.interactions);
   drawDoors(ctx, level, state.interactions);
   drawExit(ctx, level.exit, state.levelComplete);
+  drawObjects(ctx, state.renderObjects.filter((object) => object.role !== "echo-carried" && object.role !== "live-carried"));
   drawEchoTrails(ctx, state.echoes);
   drawEchoes(ctx, state.echoSamples);
+  drawObjects(ctx, state.renderObjects.filter((object) => object.role === "echo-carried"));
   drawPlayer(ctx, state.player);
+  drawObjects(ctx, state.renderObjects.filter((object) => object.role === "live-carried"));
+  drawPickupPrompt(ctx, state);
   drawHud(ctx, state);
 
   if (state.levelComplete) {
@@ -186,6 +196,59 @@ function drawExit(ctx: CanvasRenderingContext2D, exit: Rect, complete: boolean):
   ctx.fillText("EXIT", exit.x + exit.w / 2, exit.y + exit.h / 2);
 }
 
+function drawObjects(ctx: CanvasRenderingContext2D, objects: RenderObject[]): void {
+  ctx.save();
+  ctx.font = "800 10px ui-sans-serif, system-ui";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+
+  for (const object of objects) {
+    const palette = objectPalette(object.kind);
+    const alpha = object.role === "echo-carried" ? 0.62 : 1;
+
+    if (object.pulse && object.pulse > 0) {
+      ctx.strokeStyle = withAlpha("#ffffff", object.pulse);
+      ctx.lineWidth = 3 + object.pulse * 7;
+      ctx.strokeRect(
+        object.rect.x - 4 - object.pulse * 6,
+        object.rect.y - 4 - object.pulse * 6,
+        object.rect.w + 8 + object.pulse * 12,
+        object.rect.h + 8 + object.pulse * 12,
+      );
+    }
+
+    ctx.fillStyle = withAlpha(palette.fill, alpha);
+    ctx.fillRect(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
+    ctx.strokeStyle =
+      object.role === "handoff"
+        ? "#ffffff"
+        : object.role === "echo-carried"
+          ? withAlpha(palette.stroke, 0.72)
+          : palette.stroke;
+    ctx.lineWidth = object.role === "handoff" ? 3 : 2;
+    ctx.strokeRect(object.rect.x, object.rect.y, object.rect.w, object.rect.h);
+
+    if (object.kind === "shield") {
+      ctx.fillStyle = withAlpha("#ffffff", object.role === "echo-carried" ? 0.45 : 0.78);
+      ctx.fillRect(object.rect.x + object.rect.w / 2 - 2, object.rect.y + 4, 4, object.rect.h - 8);
+    } else {
+      ctx.fillStyle = withAlpha("#ffffff", object.role === "echo-carried" ? 0.3 : 0.42);
+      ctx.fillRect(object.rect.x + 4, object.rect.y + 3, object.rect.w - 8, 3);
+    }
+
+    const label =
+      object.role === "handoff"
+        ? "HANDOFF"
+        : object.role === "echo-carried"
+          ? `E${object.echoId} ${objectLabel(object.kind)}`
+          : objectLabel(object.kind);
+    ctx.fillStyle = object.role === "echo-carried" ? withAlpha(palette.stroke, 0.9) : "#243038";
+    ctx.fillText(label, object.rect.x + object.rect.w / 2, object.rect.y - 5);
+  }
+
+  ctx.restore();
+}
+
 function drawEchoTrails(ctx: CanvasRenderingContext2D, echoes: Echo[]): void {
   ctx.save();
   ctx.lineWidth = 2;
@@ -253,6 +316,32 @@ function drawPlayer(ctx: CanvasRenderingContext2D, player: PlayerState): void {
   ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
 }
 
+function drawPickupPrompt(ctx: CanvasRenderingContext2D, state: RenderState): void {
+  const target = state.carryingObject ?? state.nearbyObject;
+  if (!target || state.levelComplete) {
+    return;
+  }
+
+  const text = state.carryingObject ? "E drop" : "E pick up";
+  const rect = target.rect;
+  const x = rect.x + rect.w / 2;
+  const y = Math.max(88, rect.y - 34);
+
+  ctx.save();
+  ctx.font = "800 12px ui-sans-serif, system-ui";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const width = ctx.measureText(text).width + 18;
+  ctx.fillStyle = "rgba(18, 28, 35, 0.86)";
+  ctx.fillRect(x - width / 2, y - 11, width, 22);
+  ctx.strokeStyle = "#f4d35e";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - width / 2, y - 11, width, 22);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
 function drawHud(ctx: CanvasRenderingContext2D, state: RenderState): void {
   const { level } = state;
   const progress = Math.min(1, state.timelineTime / level.loopDuration);
@@ -285,7 +374,11 @@ function drawHud(ctx: CanvasRenderingContext2D, state: RenderState): void {
   ctx.textAlign = "right";
   ctx.fillStyle = "#384952";
   ctx.font = "600 11px ui-sans-serif, system-ui";
-  ctx.fillText("A/D move   Space/W jump   R commit   K kill   U undo   C clear   N/B level   Esc retry   F1 debug", 944, 55);
+  ctx.fillText(
+    "A/D move   Space/W jump   E pick/drop   R commit   K kill   U undo   C clear   N/B level   Esc retry   F1 debug",
+    944,
+    55,
+  );
 
   if (state.message) {
     ctx.textAlign = "right";
@@ -315,7 +408,11 @@ function drawDebug(ctx: CanvasRenderingContext2D, state: RenderState): void {
   const rect = playerRect(player);
   const activePlates = [...state.interactions.pressedPlateIds].join(", ") || "none";
   const support =
-    player.support.kind === "echo" ? `echo E${player.support.echoId}` : player.support.kind === "ground" ? "ground" : "none";
+    player.support.kind === "object"
+      ? `object ${player.support.objectId}`
+      : player.support.kind === "ground"
+        ? "ground"
+        : "none";
   const lines = [
     `player x ${player.x.toFixed(1)} y ${player.y.toFixed(1)}`,
     `velocity x ${player.vx.toFixed(1)} y ${player.vy.toFixed(1)}`,
@@ -357,4 +454,28 @@ function withAlpha(hex: string, alpha: number): string {
   const g = Number.parseInt(value.slice(2, 4), 16);
   const b = Number.parseInt(value.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function objectPalette(kind: ObjectKind): { fill: string; stroke: string } {
+  if (kind === "plate") {
+    return { fill: "#d6b75b", stroke: "#8b6d24" };
+  }
+
+  if (kind === "shield") {
+    return { fill: "#4b9ec1", stroke: "#1c5f78" };
+  }
+
+  return { fill: "#8d7666", stroke: "#4e3c32" };
+}
+
+function objectLabel(kind: ObjectKind): string {
+  if (kind === "plate") {
+    return "PLATE";
+  }
+
+  if (kind === "shield") {
+    return "SHIELD";
+  }
+
+  return "WEIGHT";
 }

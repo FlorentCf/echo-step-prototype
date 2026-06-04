@@ -2,7 +2,7 @@
 
 Echo Step is a small playable browser prototype for a puzzle-platformer built around one mechanic: each attempt can be recorded as an Echo, and all committed Echoes replay from the start of the next attempt.
 
-Echoes can act as top-only moving platforms, pressure-plate holders, and timing partners. This is intentionally a prototype: simple rectangles, readable debug visuals, and hand-authored levels.
+Each live attempt can carry one object. When the attempt becomes an Echo, the Echo replays that carried object's pickup, use, and drop timing. Source objects reset every life, while objects dropped by Echoes become physical handoff objects that later lives can pick up.
 
 ## Requirements
 
@@ -54,6 +54,7 @@ npm run preview
 
 - `A` / `D` or `Left` / `Right`: move
 - `Space` or `W`: jump
+- `E`: pick up or drop the nearest object
 - `R`: commit the current run as an Echo and restart
 - `K`: kill the current player, commit the run up to death, then restart
 - `U`: undo the most recent Echo
@@ -68,5 +69,7 @@ npm run preview
 - Each level runs on a fixed 8 second loop.
 - A level can have up to 3 committed Echoes.
 - Echoes replay from `t=0` on every new attempt.
-- The live player can land on Echoes from above, but passes through their sides and bottoms.
+- Source objects reset at the start of every new live attempt.
+- Echo-carried Plate and Weight objects can act as top-only platforms.
+- Dropped Echo objects become temporary handoff objects for the current live attempt.
 - The game is rendered with plain HTML Canvas 2D and TypeScript.

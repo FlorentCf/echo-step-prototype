@@ -1,8 +1,8 @@
 import {
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
-  type EchoSample,
   type MovementInput,
+  type ObjectPlatform,
   type PlayerState,
   type Rect,
 } from "./types";
@@ -35,14 +35,14 @@ export function stepPlayer(
   player: PlayerState,
   input: MovementInput,
   solids: Rect[],
-  echoSamples: EchoSample[],
+  objectPlatforms: ObjectPlatform[],
   dt: number,
 ): void {
   if (!player.alive) {
     return;
   }
 
-  carryByEcho(player, solids, echoSamples);
+  carryByPlatform(player, solids, objectPlatforms);
 
   if (player.grounded) {
     player.coyoteTimer = COYOTE_TIME;
@@ -75,7 +75,7 @@ export function stepPlayer(
   player.vy = Math.min(MAX_FALL_SPEED, player.vy + GRAVITY * dt);
 
   moveHorizontal(player, solids, player.vx * dt);
-  moveVerticalWithEchoes(player, solids, echoSamples, dt);
+  moveVerticalWithPlatforms(player, solids, objectPlatforms, dt);
 }
 
 export function playerRect(player: PlayerState): Rect {
@@ -90,27 +90,28 @@ export function containsOverlapFromAbove(previousBottom: number, currentBottom: 
   return previousBottom <= platform.y + 3 && currentBottom >= platform.y;
 }
 
-function carryByEcho(player: PlayerState, solids: Rect[], echoSamples: EchoSample[]): void {
-  if (player.support.kind !== "echo") {
+function carryByPlatform(player: PlayerState, solids: Rect[], platforms: ObjectPlatform[]): void {
+  if (player.support.kind !== "object") {
     return;
   }
 
-  const supportEchoId = player.support.echoId;
-  const echo = echoSamples.find((sample) => sample.echoId === supportEchoId && sample.alive);
-  if (!echo) {
+  const supportObjectId = player.support.objectId;
+  const platform = platforms.find((sample) => sample.id === supportObjectId);
+  if (!platform) {
     return;
   }
 
   const rect = playerRect(player);
   const previousBottom = rect.y + rect.h;
-  const standingOnPreviousTop = Math.abs(previousBottom - echo.previousRect.y) <= 4;
-  const overlapping = rect.x + rect.w > echo.previousRect.x + 5 && rect.x < echo.previousRect.x + echo.previousRect.w - 5;
+  const standingOnPreviousTop = Math.abs(previousBottom - platform.previousRect.y) <= 4;
+  const overlapping =
+    rect.x + rect.w > platform.previousRect.x + 5 && rect.x < platform.previousRect.x + platform.previousRect.w - 5;
 
-  if (!standingOnPreviousTop || !overlapping || echo.dx === 0) {
+  if (!standingOnPreviousTop || !overlapping || platform.dx === 0) {
     return;
   }
 
-  moveHorizontal(player, solids, echo.dx);
+  moveHorizontal(player, solids, platform.dx);
 }
 
 function moveHorizontal(player: PlayerState, solids: Rect[], dx: number): void {
@@ -136,7 +137,7 @@ function moveHorizontal(player: PlayerState, solids: Rect[], dx: number): void {
   }
 }
 
-function moveVerticalWithEchoes(player: PlayerState, solids: Rect[], echoSamples: EchoSample[], dt: number): void {
+function moveVerticalWithPlatforms(player: PlayerState, solids: Rect[], platforms: ObjectPlatform[], dt: number): void {
   const previousY = player.y;
   const previousBottom = previousY + PLAYER_HEIGHT;
   const wasFalling = player.vy >= 0;
@@ -166,32 +167,28 @@ function moveVerticalWithEchoes(player: PlayerState, solids: Rect[], echoSamples
   }
 
   const currentBottom = player.y + PLAYER_HEIGHT;
-  let bestEcho: EchoSample | undefined;
+  let bestPlatform: ObjectPlatform | undefined;
 
-  for (const echo of echoSamples) {
-    if (!echo.alive) {
-      continue;
-    }
-
+  for (const platform of platforms) {
     const rect = playerRect(player);
-    const overlapsTop = rect.x + rect.w > echo.rect.x + 5 && rect.x < echo.rect.x + echo.rect.w - 5;
-    if (!overlapsTop || !containsOverlapFromAbove(previousBottom, currentBottom, echo.rect)) {
+    const overlapsTop = rect.x + rect.w > platform.rect.x + 5 && rect.x < platform.rect.x + platform.rect.w - 5;
+    if (!overlapsTop || !containsOverlapFromAbove(previousBottom, currentBottom, platform.rect)) {
       continue;
     }
 
-    if (!bestEcho || echo.rect.y < bestEcho.rect.y) {
-      bestEcho = echo;
+    if (!bestPlatform || platform.rect.y < bestPlatform.rect.y) {
+      bestPlatform = platform;
     }
   }
 
-  if (!bestEcho) {
+  if (!bestPlatform) {
     return;
   }
 
-  player.y = bestEcho.rect.y - PLAYER_HEIGHT;
+  player.y = bestPlatform.rect.y - PLAYER_HEIGHT;
   player.vy = 0;
   player.grounded = true;
-  player.support = { kind: "echo", echoId: bestEcho.echoId };
+  player.support = { kind: "object", objectId: bestPlatform.id };
 }
 
 function approach(value: number, target: number, amount: number): number {
